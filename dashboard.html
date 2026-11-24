@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Dashboard - REST API</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+body { background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; padding: 20px; color: #333; }
+.container { max-width: 1000px; margin: 0 auto; }
+h1 { color: white; text-align: center; margin-bottom: 25px; font-size: 28px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 25px; }
+.card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); text-align: center; }
+.card .label { font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+.card .value { font-size: 42px; font-weight: bold; margin: 10px 0; color: #667eea; }
+.card .unit { font-size: 18px; color: #aaa; }
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 14px; }
+.status-online { background: #d4edda; color: #155724; }
+.status-offline { background: #f8d7da; color: #721c24; }
+.panel { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin-bottom: 25px; }
+.panel h2 { font-size: 18px; margin-bottom: 15px; color: #444; }
+.controls { display: flex; gap: 15px; flex-wrap: wrap; }
+.btn { padding: 12px 30px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.btn-on { background: #28a745; color: white; }
+.btn-on:hover { background: #218838; }
+.btn-off { background: #dc3545; color: white; }
+.btn-off:hover { background: #c82333; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12px; }
+#log { background: #1e1e1e; color: #0f0; font-family: monospace; padding: 15px; border-radius: 10px; max-height: 180px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
+#log .error { color: #f66; }
+#log .info { color: #6af; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>IoT Dashboard - REST API</h1>
+
+  <div class="cards">
+    <div class="card"><div class="label">Suhu</div><div class="value" id="suhu">--</div><div class="unit">°C</div></div>
+    <div class="card"><div class="label">Kelembaban</div><div class="value" id="kelembaban">--</div><div class="unit">%</div></div>
+    <div class="card"><div class="label">Status Sensor</div>
+      <div class="value" style="font-size:22px;"><span class="status-badge status-offline" id="status-badge">OFFLINE</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Kontrol Perangkat</h2>
+    <div class="controls">
+      <button class="btn btn-on" onclick="kontrol('lamp','on')">Nyalakan Lampu</button>
+      <button class="btn btn-off" onclick="kontrol('lamp','off')">Matikan Lampu</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>10 Data Sensor Terakhir</h2>
+    <table>
+      <thead><tr><th>Waktu</th><th>Suhu (°C)</th><th>Kelembaban (%)</th></tr></thead>
+      <tbody id="history-body"><tr><td colspan="3" style="text-align:center;color:#999;">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Log Aktivitas</h2>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'http://localhost:1880/api';
+
+function log(msg, type = 'info') {
+  const el = document.getElementById('log');
+  const time = new Date().toLocaleTimeString();
+  el.innerHTML += `<div class="${type}">[${time}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function fetchSensor() {
+  const badge = document.getElementById('status-badge');
+  try {
+    const res = await fetch(`${API_BASE}/suhu`);
+    const json = await res.json();
+    if (json.status === 'success' && json.data.suhu !== null) {
+      document.getElementById('suhu').textContent = json.data.suhu;
+      document.getElementById('kelembaban').textContent = json.data.kelembaban;
+      badge.textContent = 'ONLINE';
+      badge.className = 'status-badge status-online';
+    } else {
+      badge.textContent = 'OFFLINE';
+      badge.className = 'status-badge status-offline';
+    }
+  } catch (err) {
+    badge.textContent = 'OFFLINE';
+    badge.className = 'status-badge status-offline';
+    log(`Gagal fetch sensor: ${err.message}`, 'error');
+  }
+}
+
+async function fetchHistory() {
+  try {
+    const res = await fetch(`${API_BASE}/history`);
+    const json = await res.json();
+    const tbody = document.getElementById('history-body');
+    if (!json.data || json.data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">Belum ada data</td></tr>';
+      return;
+    }
+    tbody.innerHTML = json.data.slice(-10).reverse().map(d => `
+      <tr>
+        <td>${new Date(d.received).toLocaleTimeString()}</td>
+        <td>${d.suhu}</td>
+        <td>${d.kelembaban}</td>
+      </tr>`).join('');
+  } catch (err) {
+    log(`Gagal fetch history: ${err.message}`, 'error');
+  }
+}
+
+async function kontrol(device, action) {
+  try {
+    const res = await fetch(`${API_BASE}/kontrol`, {
+      method: 'POST',
+      // Tanpa header khusus agar browser tidak butuh preflight (CORS)
+      body: JSON.stringify({ device, action })
+    });
+    const json = await res.json();
+    if (json.status === 'success') {
+      log(`Perintah terkirim: ${device} -> ${action}`, 'info');
+    } else {
+      log(`Gagal: ${json.message}`, 'error');
+    }
+  } catch (err) {
+    log(`Error kontrol: ${err.message}`, 'error');
+  }
+}
+
+log('Dashboard dimulai, polling setiap 3 detik...');
+fetchSensor();
+fetchHistory();
+setInterval(fetchSensor, 3000);
+setInterval(fetchHistory, 5000);
+</script>
+</body>
+</html>
