@@ -104,7 +104,8 @@
     "y": 120,
     "wires": [
       [
-        "debug_sensor"
+        "debug_sensor",
+        "ws_format"
       ],
       [
         "mqtt_notif_out",
@@ -162,7 +163,7 @@
     "type": "http response",
     "z": "flow_api",
     "name": "",
-    "statusCode": "200",
+    "statusCode": "",
     "headers": {},
     "x": 600,
     "y": 200,
@@ -205,7 +206,7 @@
     "type": "http response",
     "z": "flow_api",
     "name": "",
-    "statusCode": "200",
+    "statusCode": "",
     "headers": {},
     "x": 610,
     "y": 270,
@@ -410,10 +411,42 @@
     "type": "http response",
     "z": "flow_api",
     "name": "",
-    "statusCode": "200",
+    "statusCode": "",
     "headers": {},
     "x": 630,
     "y": 620,
+    "wires": []
+  },
+  {
+    "id": "ws_listener",
+    "type": "websocket-listener",
+    "path": "/ws/sensor",
+    "wholemsg": "false"
+  },
+  {
+    "id": "ws_format",
+    "type": "function",
+    "z": "flow_api",
+    "name": "Format WebSocket",
+    "func": "// Kirim data sensor sebagai teks JSON ke semua dashboard yang terhubung\nreturn {payload: JSON.stringify(msg.payload)};",
+    "outputs": 1,
+    "x": 600,
+    "y": 80,
+    "wires": [
+      [
+        "ws_out"
+      ]
+    ]
+  },
+  {
+    "id": "ws_out",
+    "type": "websocket out",
+    "z": "flow_api",
+    "name": "WebSocket Sensor",
+    "server": "ws_listener",
+    "client": "",
+    "x": 820,
+    "y": 80,
     "wires": []
   }
 ]

@@ -31,6 +31,9 @@ sensor (simulasi ESP32) -> MQTT (Mosquitto) -> Node-RED (REST API) -> Dashboard 
   Key hanya untuk keperluan belajar; pada sistem nyata simpan key di environment variable.
 - Endpoint `/api/threshold` (PUT) untuk mengatur batas suhu, dan GET untuk membaca batas. Saat suhu melewati batas,
   flow mengirim notifikasi ke topik MQTT `iot/notifikasi`, tampil di panel Debug Node-RED, dan dashboard menampilkan banner peringatan.
+- WebSocket (`ws://localhost:1880/ws/sensor`): data sensor didorong langsung dari Node-RED ke dashboard tanpa polling.
+  Polling REST API hanya berjalan sebagai cadangan jika WebSocket terputus.
+  Catatan: WebSocket di browser tidak bisa mengirim header `X-API-Key`, sehingga jalur ini hanya untuk data baca (tanpa key).
 - Dashboard disajikan langsung oleh Node-RED (`httpStatic`) di `http://localhost:1880/dashboard.html`.
 
 ## Cara Menjalankan

@@ -40,6 +40,7 @@ th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12p
 <body>
 <div class="container">
   <h1>IoT Dashboard - REST API</h1>
+  <p style="text-align:center;color:#eee;margin:-15px 0 20px;">Mode data: <b id="mode">menghubungkan...</b></p>
 
   <div id="alert-banner" class="alert" style="display:none;"></div>
 
@@ -188,23 +189,45 @@ async function simpanBatas() {
   }
 }
 
-async function fetchSensor() {
+let riwayat = [];
+let wsAktif = false;
+
+function renderSensor(d) {
   const badge = document.getElementById('status-badge');
-  try {
-    const json = await api('/suhu');
-    if (json.status === 'success' && json.data.suhu !== null) {
-      document.getElementById('suhu').textContent = json.data.suhu;
-      document.getElementById('kelembaban').textContent = json.data.kelembaban;
-      badge.textContent = 'ONLINE';
-      badge.className = 'status-badge status-online';
-      tampilAlert(json.data);
-    } else {
-      badge.textContent = 'OFFLINE';
-      badge.className = 'status-badge status-offline';
-    }
-  } catch (err) {
+  if (d && d.suhu !== null && d.suhu !== undefined) {
+    document.getElementById('suhu').textContent = d.suhu;
+    document.getElementById('kelembaban').textContent = d.kelembaban;
+    badge.textContent = 'ONLINE';
+    badge.className = 'status-badge status-online';
+    tampilAlert(d);
+  } else {
     badge.textContent = 'OFFLINE';
     badge.className = 'status-badge status-offline';
+  }
+}
+
+function renderRiwayat() {
+  const tbody = document.getElementById('history-body');
+  if (riwayat.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">Belum ada data</td></tr>';
+    return;
+  }
+  updateGrafik(riwayat);
+  tbody.innerHTML = riwayat.slice(-10).reverse().map(d => `
+    <tr>
+      <td>${new Date(d.received).toLocaleTimeString()}</td>
+      <td>${d.suhu}</td>
+      <td>${d.kelembaban}</td>
+    </tr>`).join('');
+}
+
+// Pengambilan lewat REST API (dipakai saat awal dan sebagai cadangan)
+async function fetchSensor() {
+  try {
+    const json = await api('/suhu');
+    renderSensor(json.status === 'success' ? json.data : null);
+  } catch (err) {
+    renderSensor(null);
     log(`Gagal fetch sensor: ${err.message}`, 'error');
   }
 }
@@ -212,21 +235,45 @@ async function fetchSensor() {
 async function fetchHistory() {
   try {
     const json = await api('/history');
-    const tbody = document.getElementById('history-body');
-    if (!json.data || json.data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">Belum ada data</td></tr>';
-      return;
-    }
-    updateGrafik(json.data);
-    tbody.innerHTML = json.data.slice(-10).reverse().map(d => `
-      <tr>
-        <td>${new Date(d.received).toLocaleTimeString()}</td>
-        <td>${d.suhu}</td>
-        <td>${d.kelembaban}</td>
-      </tr>`).join('');
+    riwayat = json.data || [];
+    renderRiwayat();
   } catch (err) {
     log(`Gagal fetch history: ${err.message}`, 'error');
   }
+}
+
+// ---- WebSocket: data didorong server, tanpa polling ----
+function setMode(teks) { document.getElementById('mode').textContent = teks; }
+
+function sambungWebSocket() {
+  const url = location.protocol === 'file:'
+    ? 'ws://localhost:1880/ws/sensor'
+    : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/sensor';
+  const ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    wsAktif = true;
+    setMode('WebSocket (real-time, tanpa polling)');
+    log('WebSocket terhubung', 'info');
+  };
+  ws.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      renderSensor(d);
+      riwayat.push(d);
+      if (riwayat.length > 50) riwayat.shift();
+      renderRiwayat();
+    } catch (err) {
+      log(`Data WebSocket tidak valid: ${err.message}`, 'error');
+    }
+  };
+  ws.onclose = () => {
+    if (wsAktif) log('WebSocket terputus, kembali ke polling...', 'error');
+    wsAktif = false;
+    setMode('Polling tiap 3 detik (cadangan)');
+    setTimeout(sambungWebSocket, 3000);
+  };
+  ws.onerror = () => ws.close();
 }
 
 async function kontrol(device, action) {
@@ -245,7 +292,7 @@ async function kontrol(device, action) {
   }
 }
 
-log('Dashboard dimulai, polling setiap 3 detik...');
+log('Dashboard dimulai, menghubungkan WebSocket...');
 if (location.protocol === 'file:') {
   log('Buka dashboard lewat http://localhost:1880/dashboard.html (bukan klik file) agar API key diterima', 'error');
 }
@@ -253,8 +300,12 @@ buatGrafik();
 muatBatas();
 fetchSensor();
 fetchHistory();
-setInterval(fetchSensor, 3000);
-setInterval(fetchHistory, 3000);
+sambungWebSocket();
+
+// Cadangan: polling hanya berjalan jika WebSocket sedang tidak terhubung
+setInterval(() => {
+  if (!wsAktif) { fetchSensor(); fetchHistory(); }
+}, 3000);
 </script>
 </body>
 </html>
