@@ -30,6 +30,8 @@ table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
 th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12px; }
 .chart-wrap { position: relative; height: 320px; }
+.alert { background: #dc3545; color: white; padding: 14px 20px; border-radius: 12px; margin-bottom: 20px; font-weight: 600; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+.input { padding: 12px 16px; border: 2px solid #ddd; border-radius: 10px; font-size: 15px; width: 140px; }
 #log { background: #1e1e1e; color: #0f0; font-family: monospace; padding: 15px; border-radius: 10px; max-height: 180px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
 #log .error { color: #f66; }
 #log .info { color: #6af; }
@@ -38,6 +40,8 @@ th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12p
 <body>
 <div class="container">
   <h1>IoT Dashboard - REST API</h1>
+
+  <div id="alert-banner" class="alert" style="display:none;"></div>
 
   <div class="cards">
     <div class="card"><div class="label">Suhu</div><div class="value" id="suhu">--</div><div class="unit">°C</div></div>
@@ -53,6 +57,15 @@ th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12p
       <button class="btn btn-on" onclick="kontrol('lamp','on')">Nyalakan Lampu</button>
       <button class="btn btn-off" onclick="kontrol('lamp','off')">Matikan Lampu</button>
     </div>
+  </div>
+
+  <div class="panel">
+    <h2>Batas Suhu dan Notifikasi</h2>
+    <div class="controls">
+      <input type="number" id="input-batas" class="input" min="0" max="100" step="0.5" value="30">
+      <button class="btn btn-on" onclick="simpanBatas()">Simpan Batas</button>
+    </div>
+    <p style="margin-top:12px;color:#666;">Batas aktif: <b id="batas-aktif">--</b> °C. Notifikasi muncul bila suhu melewati batas.</p>
   </div>
 
   <div class="panel">
@@ -133,6 +146,48 @@ function updateGrafik(data) {
   grafik.update();
 }
 
+// ---- Batas suhu dan notifikasi ----
+let alertSebelumnya = false;
+function tampilAlert(d) {
+  const el = document.getElementById('alert-banner');
+  if (d.batas !== undefined) document.getElementById('batas-aktif').textContent = d.batas;
+  if (d.alert) {
+    el.style.display = 'block';
+    el.textContent = `PERINGATAN: suhu ${d.suhu}°C melewati batas ${d.batas}°C`;
+    if (!alertSebelumnya) log(`NOTIFIKASI: suhu ${d.suhu}°C melewati batas ${d.batas}°C`, 'error');
+  } else {
+    el.style.display = 'none';
+  }
+  alertSebelumnya = !!d.alert;
+}
+
+async function muatBatas() {
+  try {
+    const json = await api('/threshold');
+    if (json.status === 'success') {
+      document.getElementById('input-batas').value = json.batas;
+      document.getElementById('batas-aktif').textContent = json.batas;
+    }
+  } catch (err) {
+    log(`Gagal memuat batas: ${err.message}`, 'error');
+  }
+}
+
+async function simpanBatas() {
+  const nilai = document.getElementById('input-batas').value;
+  try {
+    const json = await api('/threshold', { method: 'PUT', body: JSON.stringify({ batas: Number(nilai) }) });
+    if (json.status === 'success') {
+      log(`Batas suhu diubah menjadi ${json.batas}°C`, 'info');
+      document.getElementById('batas-aktif').textContent = json.batas;
+    } else {
+      log(`Gagal: ${json.message}`, 'error');
+    }
+  } catch (err) {
+    log(`Error simpan batas: ${err.message}`, 'error');
+  }
+}
+
 async function fetchSensor() {
   const badge = document.getElementById('status-badge');
   try {
@@ -142,6 +197,7 @@ async function fetchSensor() {
       document.getElementById('kelembaban').textContent = json.data.kelembaban;
       badge.textContent = 'ONLINE';
       badge.className = 'status-badge status-online';
+      tampilAlert(json.data);
     } else {
       badge.textContent = 'OFFLINE';
       badge.className = 'status-badge status-offline';
@@ -194,6 +250,7 @@ if (location.protocol === 'file:') {
   log('Buka dashboard lewat http://localhost:1880/dashboard.html (bukan klik file) agar API key diterima', 'error');
 }
 buatGrafik();
+muatBatas();
 fetchSensor();
 fetchHistory();
 setInterval(fetchSensor, 3000);

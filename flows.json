@@ -98,13 +98,17 @@
     "type": "function",
     "z": "flow_api",
     "name": "Simpan Data Sensor",
-    "func": "// Simpan data terakhir ke context flow\nvar data = msg.payload;\ndata.received = new Date().toISOString();\nflow.set('lastSensor', data);\n\n// Simpan history (maks 50 data)\nvar history = flow.get('history') || [];\nhistory.push(data);\nif (history.length > 50) history.shift();\nflow.set('history', history);\n\nreturn msg;",
-    "outputs": 1,
+    "func": "var data = msg.payload;\ndata.received = new Date().toISOString();\n\n// Batas suhu (default 30, bisa diubah lewat PUT /api/threshold)\nvar batas = flow.get('threshold');\nif (typeof batas !== 'number') batas = 30;\ndata.batas = batas;\ndata.alert = data.suhu > batas;\n\n// Simpan data terakhir\nflow.set('lastSensor', data);\n\n// Simpan history (maks 50 data)\nvar history = flow.get('history') || [];\nhistory.push(data);\nif (history.length > 50) history.shift();\nflow.set('history', history);\n\n// Notifikasi hanya saat berpindah dari normal ke melewati batas\nvar sebelumnya = flow.get('alertAktif') || false;\nflow.set('alertAktif', data.alert);\nvar notif = null;\nif (data.alert && !sebelumnya) {\n    notif = {\n        topic: 'iot/notifikasi',\n        payload: {pesan: 'Suhu melewati batas', suhu: data.suhu, batas: batas, waktu: data.received}\n    };\n}\nreturn [msg, notif];",
+    "outputs": 2,
     "x": 380,
     "y": 120,
     "wires": [
       [
         "debug_sensor"
+      ],
+      [
+        "mqtt_notif_out",
+        "debug_notif"
       ]
     ]
   },
@@ -298,6 +302,118 @@
     "targetType": "msg",
     "x": 420,
     "y": 430,
+    "wires": []
+  },
+  {
+    "id": "mqtt_notif_out",
+    "type": "mqtt out",
+    "z": "flow_api",
+    "name": "Publish Notifikasi",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "broker": "mqtt_broker_config",
+    "x": 650,
+    "y": 170,
+    "wires": []
+  },
+  {
+    "id": "debug_notif",
+    "type": "debug",
+    "z": "flow_api",
+    "name": "NOTIFIKASI Suhu",
+    "active": true,
+    "tosidebar": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 650,
+    "y": 210,
+    "wires": []
+  },
+  {
+    "id": "http_put_threshold",
+    "type": "http in",
+    "z": "flow_api",
+    "name": "PUT /api/threshold",
+    "url": "/api/threshold",
+    "method": "put",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 160,
+    "y": 560,
+    "wires": [
+      [
+        "proc_threshold"
+      ]
+    ]
+  },
+  {
+    "id": "proc_threshold",
+    "type": "function",
+    "z": "flow_api",
+    "name": "Set Threshold",
+    "func": "// Cek API key dari header X-API-Key\nvar apiKey = msg.req.headers['x-api-key'];\nif (apiKey !== 'iot-2410020106') {\n    msg.statusCode = 401;\n    msg.payload = {status: 'error', message: 'API key salah atau tidak ada'};\n    msg.headers = {'Access-Control-Allow-Origin': '*'};\n    return msg;\n}\n\nvar body = msg.payload;\nif (Buffer.isBuffer(body)) body = body.toString();\nif (typeof body === 'string') {\n    try { body = JSON.parse(body); } catch (e) { body = null; }\n}\n\nvar batas = (body && body.batas !== undefined && body.batas !== null && body.batas !== '') ? Number(body.batas) : NaN;\nif (isNaN(batas) || batas < 0 || batas > 100) {\n    msg.statusCode = 400;\n    msg.payload = {status: 'error', message: 'batas harus berupa angka 0 sampai 100'};\n    msg.headers = {'Access-Control-Allow-Origin': '*'};\n    return msg;\n}\n\nflow.set('threshold', batas);\nflow.set('alertAktif', false);\n\nmsg.statusCode = 200;\nmsg.payload = {status: 'success', message: 'Batas suhu diperbarui', batas: batas};\nmsg.headers = {'Access-Control-Allow-Origin': '*'};\nreturn msg;",
+    "outputs": 1,
+    "x": 390,
+    "y": 560,
+    "wires": [
+      [
+        "http_resp_threshold"
+      ]
+    ]
+  },
+  {
+    "id": "http_resp_threshold",
+    "type": "http response",
+    "z": "flow_api",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 610,
+    "y": 560,
+    "wires": []
+  },
+  {
+    "id": "http_get_threshold",
+    "type": "http in",
+    "z": "flow_api",
+    "name": "GET /api/threshold",
+    "url": "/api/threshold",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 160,
+    "y": 620,
+    "wires": [
+      [
+        "resp_threshold"
+      ]
+    ]
+  },
+  {
+    "id": "resp_threshold",
+    "type": "function",
+    "z": "flow_api",
+    "name": "Build Response Threshold",
+    "func": "// Cek API key dari header X-API-Key\nvar apiKey = msg.req.headers['x-api-key'];\nif (apiKey !== 'iot-2410020106') {\n    msg.statusCode = 401;\n    msg.payload = {status: 'error', message: 'API key salah atau tidak ada'};\n    msg.headers = {'Access-Control-Allow-Origin': '*'};\n    return msg;\n}\n\nvar batas = flow.get('threshold');\nif (typeof batas !== 'number') batas = 30;\nmsg.payload = {status: 'success', batas: batas};\nmsg.headers = {'Access-Control-Allow-Origin': '*'};\nreturn msg;",
+    "outputs": 1,
+    "x": 400,
+    "y": 620,
+    "wires": [
+      [
+        "http_resp_threshold_get"
+      ]
+    ]
+  },
+  {
+    "id": "http_resp_threshold_get",
+    "type": "http response",
+    "z": "flow_api",
+    "name": "",
+    "statusCode": "200",
+    "headers": {},
+    "x": 630,
+    "y": 620,
     "wires": []
   }
 ]

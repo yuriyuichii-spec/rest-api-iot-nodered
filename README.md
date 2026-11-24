@@ -22,12 +22,15 @@ sensor (simulasi ESP32) -> MQTT (Mosquitto) -> Node-RED (REST API) -> Dashboard 
 |---|---|---|
 | `/api/suhu` | GET | Data sensor terakhir |
 | `/api/history` | GET | 50 data sensor terakhir |
+| `/api/threshold` | GET / PUT | Baca / ubah batas suhu (body JSON: `batas`) |
 | `/api/kontrol` | POST | Kirim perintah ke perangkat (body JSON: `device`, `action`) |
 
 ## Fitur Tambahan (Nilai Tambah)
 - Grafik real-time suhu dan kelembaban menggunakan Chart.js di dashboard.
 - Autentikasi sederhana: semua endpoint `/api/*` wajib header `X-API-Key` (salah/tidak ada = HTTP 401).
   Key hanya untuk keperluan belajar; pada sistem nyata simpan key di environment variable.
+- Endpoint `/api/threshold` (PUT) untuk mengatur batas suhu, dan GET untuk membaca batas. Saat suhu melewati batas,
+  flow mengirim notifikasi ke topik MQTT `iot/notifikasi`, tampil di panel Debug Node-RED, dan dashboard menampilkan banner peringatan.
 - Dashboard disajikan langsung oleh Node-RED (`httpStatic`) di `http://localhost:1880/dashboard.html`.
 
 ## Cara Menjalankan
@@ -41,6 +44,7 @@ sensor (simulasi ESP32) -> MQTT (Mosquitto) -> Node-RED (REST API) -> Dashboard 
 curl -H "X-API-Key: iot-2410020106" http://localhost:1880/api/suhu
 curl -H "X-API-Key: iot-2410020106" http://localhost:1880/api/history
 curl -X POST -H "X-API-Key: iot-2410020106" http://localhost:1880/api/kontrol -d "{\"device\":\"lamp\",\"action\":\"on\"}"
+curl -X PUT -H "X-API-Key: iot-2410020106" http://localhost:1880/api/threshold -d "{\"batas\":28}"
 curl http://localhost:1880/api/suhu   # tanpa key -> 401
 ```
 
