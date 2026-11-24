@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IoT Dashboard - REST API</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
 body { background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; padding: 20px; color: #333; }
@@ -28,6 +29,7 @@ h1 { color: white; text-align: center; margin-bottom: 25px; font-size: 28px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
 th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12px; }
+.chart-wrap { position: relative; height: 320px; }
 #log { background: #1e1e1e; color: #0f0; font-family: monospace; padding: 15px; border-radius: 10px; max-height: 180px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
 #log .error { color: #f66; }
 #log .info { color: #6af; }
@@ -54,6 +56,11 @@ th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12p
   </div>
 
   <div class="panel">
+    <h2>Grafik Real-time Suhu dan Kelembaban</h2>
+    <div class="chart-wrap"><canvas id="grafik"></canvas></div>
+  </div>
+
+  <div class="panel">
     <h2>10 Data Sensor Terakhir</h2>
     <table>
       <thead><tr><th>Waktu</th><th>Suhu (°C)</th><th>Kelembaban (%)</th></tr></thead>
@@ -75,6 +82,45 @@ function log(msg, type = 'info') {
   const time = new Date().toLocaleTimeString();
   el.innerHTML += `<div class="${type}">[${time}] ${msg}</div>`;
   el.scrollTop = el.scrollHeight;
+}
+
+
+// ---- Grafik Chart.js ----
+let grafik = null;
+function buatGrafik() {
+  if (typeof Chart === 'undefined') {
+    log('Chart.js gagal dimuat (cek koneksi internet)', 'error');
+    return;
+  }
+  grafik = new Chart(document.getElementById('grafik'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Suhu (°C)', data: [], borderColor: '#e4572e', backgroundColor: '#e4572e', tension: 0.3, yAxisID: 'ySuhu' },
+        { label: 'Kelembaban (%)', data: [], borderColor: '#2e86e4', backgroundColor: '#2e86e4', tension: 0.3, yAxisID: 'yHum' }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        ySuhu: { type: 'linear', position: 'left', title: { display: true, text: 'Suhu (°C)' }, suggestedMin: 20, suggestedMax: 35 },
+        yHum: { type: 'linear', position: 'right', title: { display: true, text: 'Kelembaban (%)' }, suggestedMin: 40, suggestedMax: 90, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+function updateGrafik(data) {
+  if (!grafik) return;
+  const d = data.slice(-20); // 20 titik terakhir
+  grafik.data.labels = d.map(x => new Date(x.received).toLocaleTimeString());
+  grafik.data.datasets[0].data = d.map(x => x.suhu);
+  grafik.data.datasets[1].data = d.map(x => x.kelembaban);
+  grafik.update();
 }
 
 async function fetchSensor() {
@@ -107,6 +153,7 @@ async function fetchHistory() {
       tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">Belum ada data</td></tr>';
       return;
     }
+    updateGrafik(json.data);
     tbody.innerHTML = json.data.slice(-10).reverse().map(d => `
       <tr>
         <td>${new Date(d.received).toLocaleTimeString()}</td>
@@ -137,10 +184,11 @@ async function kontrol(device, action) {
 }
 
 log('Dashboard dimulai, polling setiap 3 detik...');
+buatGrafik();
 fetchSensor();
 fetchHistory();
 setInterval(fetchSensor, 3000);
-setInterval(fetchHistory, 5000);
+setInterval(fetchHistory, 3000);
 </script>
 </body>
 </html>

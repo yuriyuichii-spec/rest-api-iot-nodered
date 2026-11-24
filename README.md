@@ -24,6 +24,9 @@ sensor (simulasi ESP32) -> MQTT (Mosquitto) -> Node-RED (REST API) -> Dashboard 
 | `/api/history` | GET | 50 data sensor terakhir |
 | `/api/kontrol` | POST | Kirim perintah ke perangkat (body JSON: `device`, `action`) |
 
+## Fitur Tambahan (Nilai Tambah)
+- Grafik real-time suhu dan kelembaban menggunakan Chart.js di dashboard.
+
 ## Cara Menjalankan
 1. Pastikan Mosquitto berjalan di `localhost:1883`.
 2. Jalankan Node-RED (`node-red`), buka `http://127.0.0.1:1880`.
