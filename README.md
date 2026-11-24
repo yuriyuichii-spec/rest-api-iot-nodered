@@ -52,4 +52,4 @@ curl http://localhost:1880/api/suhu   # tanpa key -> 401
 ```
 
 ## Screenshot
-Tambahkan screenshot hasil pengujian di folder `screenshots/`.
+Disertakan Screenshot di setiap pengerjaan.
