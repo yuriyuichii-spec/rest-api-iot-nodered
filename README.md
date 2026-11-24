@@ -26,6 +26,9 @@ sensor (simulasi ESP32) -> MQTT (Mosquitto) -> Node-RED (REST API) -> Dashboard 
 
 ## Fitur Tambahan (Nilai Tambah)
 - Grafik real-time suhu dan kelembaban menggunakan Chart.js di dashboard.
+- Autentikasi sederhana: semua endpoint `/api/*` wajib header `X-API-Key` (salah/tidak ada = HTTP 401).
+  Key hanya untuk keperluan belajar; pada sistem nyata simpan key di environment variable.
+- Dashboard disajikan langsung oleh Node-RED (`httpStatic`) di `http://localhost:1880/dashboard.html`.
 
 ## Cara Menjalankan
 1. Pastikan Mosquitto berjalan di `localhost:1883`.
@@ -35,9 +38,10 @@ sensor (simulasi ESP32) -> MQTT (Mosquitto) -> Node-RED (REST API) -> Dashboard 
 
 ## Uji Endpoint
 ```
-curl http://localhost:1880/api/suhu
-curl http://localhost:1880/api/history
-curl -X POST http://localhost:1880/api/kontrol -d "{\"device\":\"lamp\",\"action\":\"on\"}"
+curl -H "X-API-Key: iot-2410020106" http://localhost:1880/api/suhu
+curl -H "X-API-Key: iot-2410020106" http://localhost:1880/api/history
+curl -X POST -H "X-API-Key: iot-2410020106" http://localhost:1880/api/kontrol -d "{\"device\":\"lamp\",\"action\":\"on\"}"
+curl http://localhost:1880/api/suhu   # tanpa key -> 401
 ```
 
 ## Screenshot

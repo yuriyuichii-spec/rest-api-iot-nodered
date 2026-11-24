@@ -75,7 +75,17 @@ th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12p
 </div>
 
 <script>
-const API_BASE = 'http://localhost:1880/api';
+// Jika dibuka lewat Node-RED (http://localhost:1880/dashboard.html) pakai alamat relatif
+const API_BASE = location.protocol === 'file:' ? 'http://localhost:1880/api' : '/api';
+const API_KEY = 'iot-2410020106';
+
+// Semua permintaan ke API membawa header X-API-Key
+async function api(path, options = {}) {
+  options.headers = Object.assign({ 'X-API-Key': API_KEY }, options.headers || {});
+  const res = await fetch(`${API_BASE}${path}`, options);
+  if (res.status === 401) throw new Error('API key ditolak (401)');
+  return res.json();
+}
 
 function log(msg, type = 'info') {
   const el = document.getElementById('log');
@@ -126,8 +136,7 @@ function updateGrafik(data) {
 async function fetchSensor() {
   const badge = document.getElementById('status-badge');
   try {
-    const res = await fetch(`${API_BASE}/suhu`);
-    const json = await res.json();
+    const json = await api('/suhu');
     if (json.status === 'success' && json.data.suhu !== null) {
       document.getElementById('suhu').textContent = json.data.suhu;
       document.getElementById('kelembaban').textContent = json.data.kelembaban;
@@ -146,8 +155,7 @@ async function fetchSensor() {
 
 async function fetchHistory() {
   try {
-    const res = await fetch(`${API_BASE}/history`);
-    const json = await res.json();
+    const json = await api('/history');
     const tbody = document.getElementById('history-body');
     if (!json.data || json.data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">Belum ada data</td></tr>';
@@ -167,12 +175,10 @@ async function fetchHistory() {
 
 async function kontrol(device, action) {
   try {
-    const res = await fetch(`${API_BASE}/kontrol`, {
+    const json = await api('/kontrol', {
       method: 'POST',
-      // Tanpa header khusus agar browser tidak butuh preflight (CORS)
       body: JSON.stringify({ device, action })
     });
-    const json = await res.json();
     if (json.status === 'success') {
       log(`Perintah terkirim: ${device} -> ${action}`, 'info');
     } else {
@@ -184,6 +190,9 @@ async function kontrol(device, action) {
 }
 
 log('Dashboard dimulai, polling setiap 3 detik...');
+if (location.protocol === 'file:') {
+  log('Buka dashboard lewat http://localhost:1880/dashboard.html (bukan klik file) agar API key diterima', 'error');
+}
 buatGrafik();
 fetchSensor();
 fetchHistory();
